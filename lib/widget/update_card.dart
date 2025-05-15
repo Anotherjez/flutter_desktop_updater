@@ -3,8 +3,11 @@ import "package:flutter/material.dart";
 import "package:url_launcher/url_launcher.dart";
 
 class UpdateCard extends StatefulWidget {
-  const UpdateCard({this.releaseNotesLink, super.key});
+  const UpdateCard(
+      {this.releaseNotesLink, this.title, this.subtitle, super.key});
   final String? releaseNotesLink;
+  final Text? title;
+  final Text? subtitle;
 
   @override
   _UpdateCardState createState() => _UpdateCardState();
@@ -36,45 +39,47 @@ class _UpdateCardState extends State<UpdateCard> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                notifier?.getLocalization
-                                        ?.updateAvailableText ??
-                                    "Update Available",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyLarge
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface,
-                                    ),
-                              ),
-                              Text(
-                                getLocalizedString(
-                                      notifier?.getLocalization
-                                          ?.newVersionAvailableText,
-                                      [
-                                        notifier?.appName,
-                                        notifier?.appVersion,
-                                      ],
-                                    ) ??
-                                    (getLocalizedString(
-                                      "{} {} is available",
-                                      [
-                                        notifier?.appName,
-                                        notifier?.appVersion,
-                                      ],
-                                    )) ??
-                                    "",
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                              ),
+                              widget.title ??
+                                  Text(
+                                    notifier?.getLocalization
+                                            ?.updateAvailableText ??
+                                        "Update Available",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyLarge
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface,
+                                        ),
+                                  ),
+                              widget.subtitle ??
+                                  Text(
+                                    getLocalizedString(
+                                          notifier?.getLocalization
+                                              ?.newVersionAvailableText,
+                                          [
+                                            notifier?.appName,
+                                            notifier?.appVersion,
+                                          ],
+                                        ) ??
+                                        (getLocalizedString(
+                                          "{} {} is available",
+                                          [
+                                            notifier?.appName,
+                                            notifier?.appVersion,
+                                          ],
+                                        )) ??
+                                        "",
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                  ),
                             ],
                           ),
                         ],
@@ -99,40 +104,45 @@ class _UpdateCardState extends State<UpdateCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          notifier?.getLocalization?.updateAvailableText ??
-                              "Update Available",
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                        ),
-                        Text(
-                          getLocalizedString(
-                                notifier
-                                    ?.getLocalization?.newVersionAvailableText,
-                                [
-                                  notifier?.appName,
-                                  notifier?.appVersion,
-                                ],
-                              ) ??
-                              (getLocalizedString(
-                                "{} {} is available",
-                                [
-                                  notifier?.appName,
-                                  notifier?.appVersion,
-                                ],
-                              )) ??
-                              "",
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        widget.title ??
+                            Text(
+                              notifier?.getLocalization?.updateAvailableText ??
+                                  "Update Available",
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.onSurface,
+                                  ),
+                            ),
+                        widget.subtitle ??
+                            Text(
+                              getLocalizedString(
+                                    notifier?.getLocalization
+                                        ?.newVersionAvailableText,
+                                    [
+                                      notifier?.appName,
+                                      notifier?.appVersion,
+                                    ],
+                                  ) ??
+                                  (getLocalizedString(
+                                    "{} {} is available",
+                                    [
+                                      notifier?.appName,
+                                      notifier?.appVersion,
+                                    ],
+                                  )) ??
+                                  "",
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
                                     color: Theme.of(context)
                                         .colorScheme
                                         .onSurfaceVariant,
                                   ),
-                        ),
+                            ),
                         const SizedBox(height: 24),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
