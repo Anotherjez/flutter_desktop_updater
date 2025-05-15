@@ -10,11 +10,15 @@ class DesktopUpdateDirectCard extends StatefulWidget {
     required this.controller,
     required this.child,
     this.releaseNotesLink,
+    this.title,
+    this.subtitle,
   });
 
   final DesktopUpdaterController controller;
   final Widget child;
   final String? releaseNotesLink;
+  final Text? title;
+  final Text? subtitle;
 
   @override
   State<DesktopUpdateDirectCard> createState() =>
@@ -58,7 +62,11 @@ class _DesktopUpdateDirectCardState extends State<DesktopUpdateDirectCard> {
             // Empty sliver empty to avoid error
             return const SizedBox();
           } else {
-            return UpdateCard(releaseNotesLink: widget.releaseNotesLink);
+            return UpdateCard(
+              releaseNotesLink: widget.releaseNotesLink,
+              title: widget.title,
+              subtitle: widget.subtitle,
+            );
           }
         },
       ),
