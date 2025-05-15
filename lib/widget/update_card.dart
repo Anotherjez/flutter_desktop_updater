@@ -174,7 +174,7 @@ class _UpdateCardState extends State<UpdateCard> {
                                   icon: const Icon(Icons.restart_alt),
                                   label: Text(
                                     notifier?.getLocalization?.restartText ??
-                                        "Restart to update",
+                                        "Restart",
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     softWrap: true,
@@ -183,33 +183,15 @@ class _UpdateCardState extends State<UpdateCard> {
                                 ),
                               )
                             else
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.start,
-                                children: [
-                                  FilledButton.icon(
-                                    icon: const Icon(Icons.download),
-                                    label: Text(
-                                      notifier?.getLocalization?.downloadText ??
-                                          "Download",
-                                    ),
-                                    onPressed: notifier?.downloadUpdate,
+                              Flexible(
+                                child: FilledButton.icon(
+                                  icon: const Icon(Icons.download),
+                                  label: Text(
+                                    notifier?.getLocalization?.downloadText ??
+                                        "Download",
                                   ),
-                                  const SizedBox(
-                                    width: 8,
-                                  ),
-                                  if ((notifier?.isMandatory ?? false) == false)
-                                    OutlinedButton.icon(
-                                      icon: const Icon(Icons.close),
-                                      label: Text(
-                                        notifier?.getLocalization
-                                                ?.skipThisVersionText ??
-                                            "Skip this version",
-                                      ),
-                                      onPressed: () {
-                                        notifier?.makeSkipUpdate();
-                                      },
-                                    ),
-                                ],
+                                  onPressed: notifier?.downloadUpdate,
+                                ),
                               ),
                             // Release notes
                             IconButton(
