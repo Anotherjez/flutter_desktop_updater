@@ -169,13 +169,18 @@ class _UpdateCardState extends State<UpdateCard> {
                               )
                             else if (notifier?.isDownloading == false &&
                                 (notifier?.isDownloaded ?? false))
-                              FilledButton.icon(
-                                icon: const Icon(Icons.restart_alt),
-                                label: Text(
-                                  notifier?.getLocalization?.restartText ??
-                                      "Restart to update",
+                              Flexible(
+                                child: FilledButton.icon(
+                                  icon: const Icon(Icons.restart_alt),
+                                  label: Text(
+                                    notifier?.getLocalization?.restartText ??
+                                        "Restart to update",
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    softWrap: true,
+                                  ),
+                                  onPressed: () => notifier?.restartApp(),
                                 ),
-                                onPressed: () => notifier?.restartApp(),
                               )
                             else
                               Row(
