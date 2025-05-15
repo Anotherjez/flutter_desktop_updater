@@ -143,7 +143,7 @@ class _UpdateCardState extends State<UpdateCard> {
                                         .onSurfaceVariant,
                                   ),
                             ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
