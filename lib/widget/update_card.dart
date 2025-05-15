@@ -149,26 +149,23 @@ class _UpdateCardState extends State<UpdateCard> {
                           children: [
                             if ((notifier?.isDownloading ?? false) &&
                                 !(notifier?.isDownloaded ?? false))
-                              Row(
-                                children: [
-                                  FilledButton.icon(
-                                    icon: SizedBox(
-                                      height: 18,
-                                      width: 18,
-                                      child: CircularProgressIndicator(
-                                        value: notifier?.downloadProgress,
-                                      ),
+                              Flexible(
+                                child: FilledButton.icon(
+                                  icon: SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      value: notifier?.downloadProgress,
                                     ),
-                                    label: Row(
-                                      children: [
-                                        Text(
-                                          "${((notifier?.downloadProgress ?? 0.0) * 100).toInt()}% (${((notifier?.downloadedSize ?? 0.0) / 1024).toStringAsFixed(2)} MB / ${((notifier?.downloadSize ?? 0.0) / 1024).toStringAsFixed(2)} MB)",
-                                        ),
-                                      ],
-                                    ),
-                                    onPressed: null,
                                   ),
-                                ],
+                                  label: Text(
+                                    "${((notifier?.downloadProgress ?? 0.0) * 100).toInt()}% (${((notifier?.downloadedSize ?? 0.0) / 1024).toStringAsFixed(2)} MB / ${((notifier?.downloadSize ?? 0.0) / 1024).toStringAsFixed(2)} MB)",
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    softWrap: true,
+                                  ),
+                                  onPressed: null,
+                                ),
                               )
                             else if (notifier?.isDownloading == false &&
                                 (notifier?.isDownloaded ?? false))
@@ -178,47 +175,7 @@ class _UpdateCardState extends State<UpdateCard> {
                                   notifier?.getLocalization?.restartText ??
                                       "Restart to update",
                                 ),
-                                onPressed: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) {
-                                      return AlertDialog(
-                                        title: Text(
-                                          notifier?.getLocalization
-                                                  ?.warningTitleText ??
-                                              "Are you sure?",
-                                        ),
-                                        content: Text(
-                                          notifier?.getLocalization
-                                                  ?.restartWarningText ??
-                                              "A restart is required to complete the update installation.\nAny unsaved changes will be lost. Would you like to restart now?",
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () {
-                                              Navigator.of(context).pop();
-                                            },
-                                            child: Text(
-                                              notifier?.getLocalization
-                                                      ?.warningCancelText ??
-                                                  "Not now",
-                                            ),
-                                          ),
-                                          TextButton(
-                                            onPressed: () {
-                                              notifier?.restartApp();
-                                            },
-                                            child: Text(
-                                              notifier?.getLocalization
-                                                      ?.warningConfirmText ??
-                                                  "Restart",
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  );
-                                },
+                                onPressed: () => notifier?.restartApp(),
                               )
                             else
                               Row(
