@@ -67,7 +67,6 @@ class DesktopUpdaterController extends ChangeNotifier {
 
   void makeSkipUpdate() {
     _skipUpdate = true;
-    print("Skip update: $_skipUpdate");
     notifyListeners();
   }
 
@@ -81,8 +80,6 @@ class DesktopUpdaterController extends ChangeNotifier {
     );
 
     if (versionResponse?.url != null) {
-      print("Found folder url: ${versionResponse?.url}");
-
       _needUpdate = true;
       _folderUrl = versionResponse?.url;
       _isMandatory = versionResponse?.mandatory ?? false;
@@ -100,8 +97,6 @@ class DesktopUpdaterController extends ChangeNotifier {
       _releaseNotes = versionResponse?.changes;
       _appName = versionResponse?.appName;
       _appVersion = versionResponse?.version;
-
-      print("Need update: $_needUpdate");
 
       notifyListeners();
     }

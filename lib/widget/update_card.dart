@@ -3,8 +3,12 @@ import "package:flutter/material.dart";
 import "package:url_launcher/url_launcher.dart";
 
 class UpdateCard extends StatefulWidget {
-  const UpdateCard(
-      {this.releaseNotesLink, this.title, this.subtitle, super.key});
+  const UpdateCard({
+    this.releaseNotesLink,
+    this.title,
+    this.subtitle,
+    super.key,
+  });
   final String? releaseNotesLink;
   final Text? title;
   final Text? subtitle;
@@ -308,7 +312,8 @@ class _UpdateCardState extends State<UpdateCard> {
                                                                 const BorderRadius
                                                                     .all(
                                                               Radius.circular(
-                                                                  12),
+                                                                12,
+                                                              ),
                                                             ),
                                                             color: Theme.of(
                                                               context,

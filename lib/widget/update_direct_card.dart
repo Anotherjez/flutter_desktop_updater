@@ -64,8 +64,6 @@ class _DesktopUpdateDirectCardState extends State<DesktopUpdateDirectCard> {
           } else {
             return UpdateCard(
               releaseNotesLink: widget.releaseNotesLink,
-              title: widget.title,
-              subtitle: widget.subtitle,
             );
           }
         },

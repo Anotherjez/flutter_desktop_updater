@@ -28,7 +28,6 @@ Future<Stream<UpdateProgress>> updateAppFunction({
   try {
     if (await dir.exists()) {
       if (changes.isEmpty) {
-        print("No updates required.");
         await responseStream.close();
         return responseStream.stream;
       }
@@ -77,7 +76,6 @@ Future<Stream<UpdateProgress>> updateAppFunction({
                   completedFiles: completedFiles,
                 ),
               );
-              print("Completed: ${file.filePath}");
             }).catchError((error) {
               responseStream.addError(error);
               return null;

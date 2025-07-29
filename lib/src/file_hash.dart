@@ -18,7 +18,6 @@ Future<String> getFileHash(File file) async {
     // Hash'i utf-8 base64'e dönüştürün ve geri döndürün
     return base64.encode(hash.bytes);
   } catch (e) {
-    print("Error reading file ${file.path}: $e");
     return "";
   }
 }

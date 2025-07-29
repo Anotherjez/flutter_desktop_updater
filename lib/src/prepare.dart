@@ -47,12 +47,8 @@ Future<List<FileHashModel?>> prepareUpdateAppFunction({
     // Close the file
     await sink.close();
 
-    print("Hashes file downloaded to ${outputFile.path}");
-
     final oldHashFilePath = await genFileHashes();
     final newHashFilePath = outputFile.path;
-
-    print("Old hashes file: $oldHashFilePath");
 
     final changes = await verifyFileHashes(
       oldHashFilePath,

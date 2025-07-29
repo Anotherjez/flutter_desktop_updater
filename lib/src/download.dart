@@ -57,7 +57,6 @@ Future<void> downloadFile(
     onDone: () async {
       await sink.close();
       client.close();
-      print("File downloaded to $fullSavePath");
     },
     onError: (e) {
       sink.close();

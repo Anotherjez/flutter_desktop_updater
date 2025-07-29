@@ -49,8 +49,9 @@ class MockDesktopUpdaterPlatform
   }
 
   @override
-  Future<List<FileHashModel?>> prepareUpdateApp(
-      {required String remoteUpdateFolder}) {
+  Future<List<FileHashModel?>> prepareUpdateApp({
+    required String remoteUpdateFolder,
+  }) {
     return Future.value([]);
   }
 }
