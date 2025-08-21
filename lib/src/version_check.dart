@@ -59,9 +59,10 @@ Future<ItemModel?> versionCheckFunction({
       jsonDecode(appArchiveString),
     );
 
+    final os = Platform.operatingSystem.toLowerCase();
     final versions = appArchiveDecoded.items
         .where(
-          (element) => element.platform == Platform.operatingSystem,
+          (element) => (element.platform).toLowerCase() == os,
         )
         .toList();
 
@@ -79,7 +80,7 @@ Future<ItemModel?> versionCheckFunction({
       },
     );
 
-    late String? currentVersion;
+  late String? currentVersion;
 
     if (Platform.isLinux) {
       final exePath = await File("/proc/self/exe").resolveSymbolicLinks();
@@ -101,7 +102,17 @@ Future<ItemModel?> versionCheckFunction({
       throw Exception("Desktop Updater: Current version is null");
     }
 
-    if (latestVersion.shortVersion > int.parse(currentVersion!)) {
+    // Normalize and parse current version build number robustly
+    var current = currentVersion!.trim();
+    if (current.contains('+')) {
+      current = current.split('+').last.trim();
+    }
+    final digitMatch = RegExp(r"(\d+)").firstMatch(current);
+    final currentBuild = int.tryParse(current) ??
+        (digitMatch != null ? int.tryParse(digitMatch.group(1)!) : null) ??
+        0;
+
+    if (latestVersion.shortVersion > currentBuild) {
       // calculate totalSize
       final tempDir = await Directory.systemTemp.createTemp("desktop_updater");
 
