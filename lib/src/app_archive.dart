@@ -95,7 +95,7 @@ class ItemModel {
       mandatory: mandatory ?? this.mandatory,
       url: url ?? this.url,
       platform: platform ?? this.platform,
-      changedFiles: changedFiles ?? changedFiles,
+      changedFiles: changedFiles ?? this.changedFiles,
       appName: appName ?? this.appName,
     );
   }

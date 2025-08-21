@@ -35,7 +35,7 @@ Future<void> downloadFile(
   // Prepare file for writing
   final file = File(fullSavePath);
   final sink = file.openWrite();
-  var received = 0;
+  // cumulative 'received' not required; we report deltas per chunk
   final contentLength = response.contentLength ?? 0;
 
   // Listen to the HTTP response stream
@@ -44,12 +44,12 @@ Future<void> downloadFile(
       // Write chunk to file
       sink.add(chunk);
 
-      // Increment received bytes based on HTTP chunk
-      received += chunk.length;
+  // Increment received bytes based on HTTP chunk (handled by delta report)
 
       // Report progress
       if (progressCallback != null && contentLength != 0) {
-        final receivedKB = received / 1024;
+  // Report only the delta for this chunk; the aggregator sums it
+  final receivedKB = chunk.length / 1024;
         final totalKB = contentLength / 1024;
         progressCallback(receivedKB, totalKB);
       }

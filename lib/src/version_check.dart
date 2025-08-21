@@ -6,6 +6,16 @@ import "package:desktop_updater/src/file_hash.dart";
 import "package:http/http.dart" as http;
 import "package:path/path.dart" as path;
 
+String _normalizePlatform(String s) {
+  final v = s.toLowerCase();
+  if (v == "win" || v == "win32" || v == "windows") return "windows";
+  if (v == "mac" || v == "macos" || v == "darwin" || v == "osx") {
+    return "macos";
+  }
+  if (v == "linux" || v == "gnu/linux") return "linux";
+  return v;
+}
+
 Future<ItemModel?> versionCheckFunction({
   required String appArchiveUrl,
 }) async {
@@ -59,9 +69,10 @@ Future<ItemModel?> versionCheckFunction({
       jsonDecode(appArchiveString),
     );
 
+    final targetPlatform = _normalizePlatform(Platform.operatingSystem);
     final versions = appArchiveDecoded.items
         .where(
-          (element) => element.platform == Platform.operatingSystem,
+          (element) => _normalizePlatform(element.platform) == targetPlatform,
         )
         .toList();
 
@@ -79,7 +90,7 @@ Future<ItemModel?> versionCheckFunction({
       },
     );
 
-    late String? currentVersion;
+  late String? currentVersion;
 
     if (Platform.isLinux) {
       final exePath = await File("/proc/self/exe").resolveSymbolicLinks();
@@ -101,15 +112,42 @@ Future<ItemModel?> versionCheckFunction({
       throw Exception("Desktop Updater: Current version is null");
     }
 
-    if (latestVersion.shortVersion > int.parse(currentVersion!)) {
+    // Robustly parse build number (handle strings like "9", "9-windows", etc.)
+    int? currentBuild = int.tryParse(currentVersion!.trim());
+    if (currentBuild == null) {
+      final m = RegExp(r"(\d+)").firstMatch(currentVersion!);
+      if (m != null) {
+        currentBuild = int.tryParse(m.group(1)!);
+      }
+    }
+
+    if (currentBuild == null) {
+      throw Exception("Desktop Updater: Unable to parse current build number: $currentVersion");
+    }
+
+    if (latestVersion.shortVersion > currentBuild) {
       // calculate totalSize
       final tempDir = await Directory.systemTemp.createTemp("desktop_updater");
 
       final client = http.Client();
 
-      final newHashFileUrl = "${latestVersion.url}/hashes.json";
-      final newHashFileRequest = http.Request("GET", Uri.parse(newHashFileUrl));
-      final newHashFileResponse = await client.send(newHashFileRequest);
+      // Build a robust URL for hashes.json and handle '+' encoding edge-cases
+      final baseUri = Uri.parse(latestVersion.url);
+      Uri newHashUri = baseUri.replace(
+        path: baseUri.path.endsWith("/")
+            ? "${baseUri.path}hashes.json"
+            : "${baseUri.path}/hashes.json",
+      );
+
+      http.StreamedResponse newHashFileResponse =
+          await client.send(http.Request("GET", newHashUri));
+
+      // Retry with %2B-encoded '+' if the first attempt fails
+      if (newHashFileResponse.statusCode != 200) {
+        final encodedUrl = newHashUri.toString().replaceAll("+", "%2B");
+        newHashFileResponse =
+            await client.send(http.Request("GET", Uri.parse(encodedUrl)));
+      }
 
       if (newHashFileResponse.statusCode != 200) {
         client.close();
