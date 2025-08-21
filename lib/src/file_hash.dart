@@ -5,17 +5,23 @@ import "dart:io";
 import "package:cryptography_plus/cryptography_plus.dart";
 import "package:desktop_updater/desktop_updater.dart";
 import "package:desktop_updater/src/app_archive.dart";
+import "package:path/path.dart" as p;
 
 Future<String> getFileHash(File file) async {
   try {
-    // Dosya içeriğini okuyun
-    final List<int> fileBytes = await file.readAsBytes();
+    // Stream the file into the hash sink to avoid loading the whole file in memory
+    final algorithm = Blake2b();
+    final sink = algorithm.newHashSink();
 
-    // blake2s algoritmasıyla hash hesaplayın
+    // Read file in chunks and feed to the sink
+    await for (final chunk in file.openRead()) {
+      sink.add(chunk);
+    }
 
-    final hash = await Blake2b().hash(fileBytes);
+    sink.close();
+    final hash = await sink.hash();
 
-    // Hash'i utf-8 base64'e dönüştürün ve geri döndürün
+    // Return base64-encoded hash bytes
     return base64.encode(hash.bytes);
   } catch (e) {
     return "";
@@ -105,22 +111,31 @@ Future<String> genFileHashes({String? path}) async {
 
     // Dizin içindeki tüm dosyaları döngüyle okuyoruz
     await for (final entity in dir.list(recursive: true, followLinks: false)) {
-      if (entity is File) {
-        // Dosyanın hash'ini al
-        final hash = await getFileHash(entity);
+      if (entity is! File) continue;
 
-        final foundPath = entity.path.substring(dir.path.length + 1);
+      final relative = entity.path.substring(dir.path.length + 1);
+      final parts = p.split(relative);
 
-        // Dosya yolunu ve hash değerini yaz
-        if (hash.isNotEmpty) {
-          final hashObj = FileHashModel(
-            filePath: foundPath,
-            calculatedHash: hash,
-            length: entity.lengthSync(),
-          );
-          hashList.add(hashObj);
-        }
+      // Skip temp/meta files and our own updater working directory
+      final isHashesJson = p.equals(relative, "hashes.json");
+      final isDSStore = relative.endsWith(".DS_Store");
+      final isInUpdateDir =
+          parts.isNotEmpty && parts.first.toLowerCase() == "update";
+
+      if (isHashesJson || isDSStore || isInUpdateDir) {
+        continue;
       }
+
+      // Dosyanın hash'ini al (streaming)
+      final hash = await getFileHash(entity);
+      if (hash.isEmpty) continue;
+
+      final hashObj = FileHashModel(
+        filePath: relative,
+        calculatedHash: hash,
+        length: entity.lengthSync(),
+      );
+      hashList.add(hashObj);
     }
 
     // Dosya hash'lerini json formatına çevir

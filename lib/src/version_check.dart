@@ -44,8 +44,9 @@ Future<ItemModel?> versionCheckFunction({
     // Save the file
     await appArchiveResponse.stream.pipe(sink);
 
-    // Close the file
+    // Close the file and the http client
     await sink.close();
+    client.close();
 
     if (!outputFile.existsSync()) {
       throw Exception("Desktop Updater: App archive do not exist");
