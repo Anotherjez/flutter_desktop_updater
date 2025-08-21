@@ -115,7 +115,8 @@ Future<String> genFileHashes({String? path}) async {
       // Exclude updater artifacts and temp files
       final isHashesJson = p.equals(relativePath, "hashes.json");
       final isDSStore = relativePath.endsWith(".DS_Store");
-      final isInUpdateDir = parts.isNotEmpty && parts.first.toLowerCase() == "update";
+      final isInUpdateDir =
+          parts.isNotEmpty && parts.first.toLowerCase() == "update";
       if (isHashesJson || isDSStore || isInUpdateDir) {
         continue;
       }

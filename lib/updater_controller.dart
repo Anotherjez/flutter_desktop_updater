@@ -115,10 +115,10 @@ class DesktopUpdaterController extends ChangeNotifier {
 
       // Recalculate total size in KB
       _downloadSize = (_changedFiles?.fold<double>(
-                0,
-                (prev, e) => prev + ((e?.length ?? 0) / 1024.0),
-              )) ??
-              0.0;
+            0,
+            (prev, e) => prev + ((e?.length ?? 0) / 1024.0),
+          )) ??
+          0.0;
       notifyListeners();
     }
 

@@ -79,7 +79,7 @@ Future<ItemModel?> versionCheckFunction({
       },
     );
 
-  late String? currentVersion;
+    late String? currentVersion;
 
     if (Platform.isLinux) {
       final exePath = await File("/proc/self/exe").resolveSymbolicLinks();
