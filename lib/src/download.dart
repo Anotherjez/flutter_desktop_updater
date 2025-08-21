@@ -44,12 +44,12 @@ Future<void> downloadFile(
       // Write chunk to file
       sink.add(chunk);
 
-  // Increment received bytes based on HTTP chunk (handled by delta report)
+      // Increment received bytes based on HTTP chunk (handled by delta report)
 
       // Report progress
       if (progressCallback != null && contentLength != 0) {
-  // Report only the delta for this chunk; the aggregator sums it
-  final receivedKB = chunk.length / 1024;
+        // Report only the delta for this chunk; the aggregator sums it
+        final receivedKB = chunk.length / 1024;
         final totalKB = contentLength / 1024;
         progressCallback(receivedKB, totalKB);
       }

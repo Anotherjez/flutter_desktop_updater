@@ -187,7 +187,8 @@ namespace desktop_updater
     }
     else if (method_call.method_name().compare("getCurrentVersion") == 0)
     {
-      // Get only bundle version, Product version 1.0.0+2, should return 2
+      // Return build number as a string. Prefer ProductVersion with "+<build>".
+      // Fallback: use VS_FIXEDFILEINFO and take the 4th numeric component.
       wchar_t exePath[MAX_PATH];
       GetModuleFileNameW(NULL, exePath, MAX_PATH);
 
@@ -208,7 +209,7 @@ namespace desktop_updater
         return;
       }
 
-      // Retrieve translation information
+      // Try StringFileInfo first
       struct LANGANDCODEPAGE
       {
         WORD wLanguage;
@@ -216,45 +217,61 @@ namespace desktop_updater
       } *lpTranslate;
 
       UINT cbTranslate = 0;
-      if (!VerQueryValueW(verData.data(), L"\\VarFileInfo\\Translation",
-                          (LPVOID *)&lpTranslate, &cbTranslate) ||
-          cbTranslate < sizeof(LANGANDCODEPAGE))
+      bool returned = false;
+      if (VerQueryValueW(verData.data(), L"\\VarFileInfo\\Translation",
+                         (LPVOID *)&lpTranslate, &cbTranslate) &&
+          cbTranslate >= sizeof(LANGANDCODEPAGE))
       {
-        result->Error("VersionError", "Unable to get translation info.");
+        wchar_t subBlock[50];
+        swprintf(subBlock, 50, L"\\StringFileInfo\\%04x%04x\\ProductVersion",
+                 lpTranslate[0].wLanguage, lpTranslate[0].wCodePage);
+
+        if (VerQueryValueW(verData.data(), subBlock, (LPVOID *)&lpBuffer, &size))
+        {
+          std::wstring productVersion((wchar_t *)lpBuffer);
+          size_t plusPos = productVersion.find(L'+');
+          if (plusPos != std::wstring::npos && plusPos + 1 < productVersion.length())
+          {
+            std::wstring buildNumber = productVersion.substr(plusPos + 1);
+            // Trim spaces
+            size_t endpos = buildNumber.find_last_not_of(L' ');
+            if (endpos != std::wstring::npos)
+              buildNumber = buildNumber.substr(0, endpos + 1);
+
+            int size_needed = WideCharToMultiByte(CP_UTF8, 0, buildNumber.c_str(), -1, NULL, 0, NULL, NULL);
+            std::string buildNumberStr(size_needed - 1, 0);
+            WideCharToMultiByte(CP_UTF8, 0, buildNumber.c_str(), -1, &buildNumberStr[0], size_needed - 1, NULL, NULL);
+
+            result->Success(flutter::EncodableValue(buildNumberStr));
+            returned = true;
+          }
+        }
+      }
+
+      if (returned)
+        return;
+
+      // Fallback: read VS_FIXEDFILEINFO numeric version
+      VS_FIXEDFILEINFO *pFixedInfo = nullptr;
+      UINT fixedLen = 0;
+      if (VerQueryValueW(verData.data(), L"\\", (LPVOID *)&pFixedInfo, &fixedLen) && pFixedInfo &&
+          pFixedInfo->dwSignature == 0xfeef04bd)
+      {
+        // Version is a.b.c.d in high/low words; take d as build number
+        DWORD fileVersionMS = pFixedInfo->dwFileVersionMS;
+        DWORD fileVersionLS = pFixedInfo->dwFileVersionLS;
+        WORD a = HIWORD(fileVersionMS);
+        WORD b = LOWORD(fileVersionMS);
+        WORD c = HIWORD(fileVersionLS);
+        WORD d = LOWORD(fileVersionLS);
+
+        std::ostringstream oss;
+        oss << d;
+        result->Success(flutter::EncodableValue(oss.str()));
         return;
       }
 
-      // Build the query string using the first translation
-      wchar_t subBlock[50];
-      swprintf(subBlock, 50, L"\\StringFileInfo\\%04x%04x\\ProductVersion",
-               lpTranslate[0].wLanguage, lpTranslate[0].wCodePage);
-
-      if (!VerQueryValueW(verData.data(), subBlock, (LPVOID *)&lpBuffer, &size))
-      {
-        result->Error("VersionError", "Unable to query version value.");
-        return;
-      }
-
-      std::wstring productVersion((wchar_t *)lpBuffer);
-      size_t plusPos = productVersion.find(L'+');
-      if (plusPos != std::wstring::npos && plusPos + 1 < productVersion.length())
-      {
-        std::wstring buildNumber = productVersion.substr(plusPos + 1);
-
-        // Trim any trailing spaces
-        buildNumber.erase(buildNumber.find_last_not_of(L' ') + 1);
-
-        // Convert wchar_t to std::string (UTF-8)
-        int size_needed = WideCharToMultiByte(CP_UTF8, 0, buildNumber.c_str(), -1, NULL, 0, NULL, NULL);
-        std::string buildNumberStr(size_needed - 1, 0); // Exclude null terminator
-        WideCharToMultiByte(CP_UTF8, 0, buildNumber.c_str(), -1, &buildNumberStr[0], size_needed - 1, NULL, NULL);
-
-        result->Success(flutter::EncodableValue(buildNumberStr));
-      }
-      else
-      {
-        result->Error("VersionError", "Invalid version format.");
-      }
+      result->Error("VersionError", "Invalid version format.");
     }
     else
     {
