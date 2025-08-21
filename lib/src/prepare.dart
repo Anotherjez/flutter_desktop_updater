@@ -1,9 +1,11 @@
 import "dart:io";
+import "dart:convert";
 
 import "package:desktop_updater/desktop_updater.dart";
 import "package:desktop_updater/src/app_archive.dart";
 import "package:desktop_updater/src/file_hash.dart";
 import "package:http/http.dart" as http;
+import "package:path/path.dart" as path;
 
 Future<List<FileHashModel?>> prepareUpdateAppFunction({
   required String remoteUpdateFolder,
@@ -47,13 +49,30 @@ Future<List<FileHashModel?>> prepareUpdateAppFunction({
     // Close the file
     await sink.close();
 
-    final oldHashFilePath = await genFileHashes();
-    final newHashFilePath = outputFile.path;
+    // Compute changes directly from remote hashes
+    final remoteHashesStr = await outputFile.readAsString();
+    final remoteHashes = (jsonDecode(remoteHashesStr) as List<dynamic>)
+        .map<FileHashModel?>((e) => FileHashModel.fromJson(e))
+        .whereType<FileHashModel>()
+        .toList();
 
-    final changes = await verifyFileHashes(
-      oldHashFilePath,
-      newHashFilePath,
-    );
+    final changes = <FileHashModel>[];
+
+    for (final remote in remoteHashes) {
+      final parts = remote.filePath.split(RegExp(r"[\\/]+"));
+      final localFullPath = path.joinAll([dir.path, ...parts]);
+      final localFile = File(localFullPath);
+
+      if (!await localFile.exists()) {
+        changes.add(remote);
+        continue;
+      }
+
+      final localHash = await getFileHash(localFile);
+      if (localHash.isEmpty || localHash != remote.calculatedHash) {
+        changes.add(remote);
+      }
+    }
 
     return changes;
   }

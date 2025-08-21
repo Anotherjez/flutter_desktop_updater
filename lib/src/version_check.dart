@@ -2,7 +2,6 @@ import "dart:convert";
 import "dart:io";
 
 import "package:desktop_updater/desktop_updater.dart";
-import "package:desktop_updater/src/file_hash.dart";
 import "package:http/http.dart" as http;
 import "package:path/path.dart" as path;
 
@@ -113,50 +112,9 @@ Future<ItemModel?> versionCheckFunction({
         0;
 
     if (latestVersion.shortVersion > currentBuild) {
-      // calculate totalSize
-      final tempDir = await Directory.systemTemp.createTemp("desktop_updater");
-
-      final client = http.Client();
-
-      final newHashFileUrl = "${latestVersion.url}/hashes.json";
-      final newHashFileRequest = http.Request("GET", Uri.parse(newHashFileUrl));
-      final newHashFileResponse = await client.send(newHashFileRequest);
-
-      if (newHashFileResponse.statusCode != 200) {
-        client.close();
-        throw const HttpException("Failed to download hashes.json");
-      }
-
-      final outputFile =
-          File("${tempDir.path}${Platform.pathSeparator}hashes.json");
-      final sink = outputFile.openWrite();
-
-      await newHashFileResponse.stream.listen(
-        sink.add,
-        onDone: () async {
-          await sink.close();
-          client.close();
-        },
-        onError: (e) async {
-          await sink.close();
-          client.close();
-          throw e;
-        },
-        cancelOnError: true,
-      ).asFuture();
-
-      final oldHashFilePath = await genFileHashes();
-      final newHashFilePath = outputFile.path;
-
-      final changedFiles = await verifyFileHashes(
-        oldHashFilePath,
-        newHashFilePath,
-      );
-
-      if (changedFiles.isEmpty) {}
-
+      // Return quickly; compute diffs later via prepareUpdateAppFunction
       return latestVersion.copyWith(
-        changedFiles: changedFiles,
+        changedFiles: const [],
         appName: appArchiveDecoded.appName,
       );
     } else {}

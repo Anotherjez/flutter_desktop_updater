@@ -107,8 +107,19 @@ class DesktopUpdaterController extends ChangeNotifier {
       throw Exception("Folder URL is not set");
     }
 
+    // Lazily prepare changed files if not already present
     if (_changedFiles == null || _changedFiles!.isEmpty) {
-      throw Exception("Changed files are not set");
+      _changedFiles = await _plugin.prepareUpdateApp(
+        remoteUpdateFolder: _folderUrl!,
+      );
+
+      // Recalculate total size in KB
+      _downloadSize = (_changedFiles?.fold<double>(
+                0,
+                (prev, e) => prev + ((e?.length ?? 0) / 1024.0),
+              )) ??
+              0.0;
+      notifyListeners();
     }
 
     final stream = await _plugin.updateApp(
