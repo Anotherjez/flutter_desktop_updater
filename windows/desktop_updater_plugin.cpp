@@ -258,11 +258,7 @@ namespace desktop_updater
           pFixedInfo->dwSignature == 0xfeef04bd)
       {
         // Version is a.b.c.d in high/low words; take d as build number
-        DWORD fileVersionMS = pFixedInfo->dwFileVersionMS;
         DWORD fileVersionLS = pFixedInfo->dwFileVersionLS;
-        WORD a = HIWORD(fileVersionMS);
-        WORD b = LOWORD(fileVersionMS);
-        WORD c = HIWORD(fileVersionLS);
         WORD d = LOWORD(fileVersionLS);
 
         std::ostringstream oss;
