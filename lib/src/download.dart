@@ -45,7 +45,7 @@ Future<void> downloadFile(
       sink.add(chunk);
 
       // Increment received bytes based on HTTP chunk
-      received = chunk.length;
+      received += chunk.length;
 
       // Report progress
       if (progressCallback != null && contentLength != 0) {

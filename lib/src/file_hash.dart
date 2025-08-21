@@ -5,17 +5,18 @@ import "dart:io";
 import "package:cryptography_plus/cryptography_plus.dart";
 import "package:desktop_updater/desktop_updater.dart";
 import "package:desktop_updater/src/app_archive.dart";
+import "package:path/path.dart" as p;
 
 Future<String> getFileHash(File file) async {
   try {
-    // Dosya içeriğini okuyun
-    final List<int> fileBytes = await file.readAsBytes();
-
-    // blake2s algoritmasıyla hash hesaplayın
-
-    final hash = await Blake2b().hash(fileBytes);
-
-    // Hash'i utf-8 base64'e dönüştürün ve geri döndürün
+    // Stream the file to avoid loading into memory
+    final algo = Blake2b();
+    final sink = algo.newHashSink();
+    await for (final chunk in file.openRead()) {
+      sink.add(chunk);
+    }
+    sink.close();
+    final hash = await sink.hash();
     return base64.encode(hash.bytes);
   } catch (e) {
     return "";
@@ -97,37 +98,47 @@ Future<String> genFileHashes({String? path}) async {
     final outputFile =
         File("${tempDir.path}${Platform.pathSeparator}hashes.json");
 
-    // Çıktı dosyasını açıyoruz
+    // Çıktı dosyasını açıyoruz (streaming JSON)
     final sink = outputFile.openWrite();
 
-    // ignore: prefer_final_locals
-    var hashList = <FileHashModel>[];
+    // JSON array start
+    sink.write("[");
+    var first = true;
 
     // Dizin içindeki tüm dosyaları döngüyle okuyoruz
     await for (final entity in dir.list(recursive: true, followLinks: false)) {
-      if (entity is File) {
-        // Dosyanın hash'ini al
-        final hash = await getFileHash(entity);
+      if (entity is! File) continue;
 
-        final foundPath = entity.path.substring(dir.path.length + 1);
+      final relativePath = entity.path.substring(dir.path.length + 1);
+      final parts = p.split(relativePath);
 
-        // Dosya yolunu ve hash değerini yaz
-        if (hash.isNotEmpty) {
-          final hashObj = FileHashModel(
-            filePath: foundPath,
-            calculatedHash: hash,
-            length: entity.lengthSync(),
-          );
-          hashList.add(hashObj);
-        }
+      // Exclude updater artifacts and temp files
+      final isHashesJson = p.equals(relativePath, "hashes.json");
+      final isDSStore = relativePath.endsWith(".DS_Store");
+      final isInUpdateDir = parts.isNotEmpty && parts.first.toLowerCase() == "update";
+      if (isHashesJson || isDSStore || isInUpdateDir) {
+        continue;
       }
+
+      final hash = await getFileHash(entity);
+      if (hash.isEmpty) continue;
+
+      final obj = FileHashModel(
+        filePath: relativePath,
+        calculatedHash: hash,
+        length: entity.lengthSync(),
+      ).toJson();
+
+      if (!first) {
+        sink.write(",");
+      } else {
+        first = false;
+      }
+      sink.write(jsonEncode(obj));
     }
 
-    // Dosya hash'lerini json formatına çevir
-    final jsonStr = jsonEncode(hashList);
-
-    // Çıktı dosyasına yaz
-    sink.write(jsonStr);
+    // JSON array end
+    sink.write("]");
 
     // Çıktıyı kaydediyoruz
     await sink.close();
