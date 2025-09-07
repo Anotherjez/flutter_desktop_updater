@@ -151,7 +151,25 @@ class _UpdateCardState extends State<UpdateCard> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            if ((notifier?.isDownloading ?? false) &&
+                            if ((notifier?.isPreparing ?? false) &&
+                                !(notifier?.isDownloaded ?? false))
+                              Flexible(
+                                child: FilledButton.icon(
+                                  icon: const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                  label: const Text(
+                                    "Preparing…",
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    softWrap: true,
+                                  ),
+                                  onPressed: null,
+                                ),
+                              )
+                            else if ((notifier?.isDownloading ?? false) &&
                                 !(notifier?.isDownloaded ?? false))
                               Flexible(
                                 child: FilledButton.icon(

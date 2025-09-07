@@ -37,6 +37,9 @@ class DesktopUpdaterController extends ChangeNotifier {
   bool _isDownloading = false;
   bool get isDownloading => _isDownloading;
 
+  bool _isPreparing = false;
+  bool get isPreparing => _isPreparing;
+
   bool _isDownloaded = false;
   bool get isDownloaded => _isDownloaded;
 
@@ -98,6 +101,27 @@ class DesktopUpdaterController extends ChangeNotifier {
       _appName = versionResponse?.appName;
       _appVersion = versionResponse?.version;
 
+      // Pre-fetch changed files in background to reduce start lag
+      if (_folderUrl != null) {
+        // Don't await; prepare in background
+        _isPreparing = true;
+        notifyListeners();
+        DesktopUpdater().prepareUpdateApp(remoteUpdateFolder: _folderUrl!).then((files) {
+          _changedFiles = files;
+          _downloadSize = (_changedFiles?.fold<double>(
+                    0,
+                    (prev, e) => prev + ((e?.length ?? 0) / 1024.0),
+                  )) ??
+                  0.0;
+          _isPreparing = false;
+          notifyListeners();
+        }).catchError((_) {
+          // ignore background errors; will retry on explicit download
+          _isPreparing = false;
+          notifyListeners();
+        });
+      }
+
       notifyListeners();
     }
   }
@@ -107,9 +131,16 @@ class DesktopUpdaterController extends ChangeNotifier {
       throw Exception("Folder URL is not set");
     }
 
+  // Guard against re-entrancy (double taps)
+  if (_isDownloading) return;
+  _isDownloading = true;
+  _isDownloaded = false;
+  _isPreparing = _changedFiles == null || _changedFiles!.isEmpty;
+  notifyListeners();
+
     // Lazily prepare changed files if not already present
     if (_changedFiles == null || _changedFiles!.isEmpty) {
-      _changedFiles = await _plugin.prepareUpdateApp(
+  _changedFiles = await _plugin.prepareUpdateApp(
         remoteUpdateFolder: _folderUrl!,
       );
 
@@ -119,10 +150,11 @@ class DesktopUpdaterController extends ChangeNotifier {
             (prev, e) => prev + ((e?.length ?? 0) / 1024.0),
           )) ??
           0.0;
-      notifyListeners();
+  _isPreparing = false;
+  notifyListeners();
     }
 
-    final stream = await _plugin.updateApp(
+  final stream = await _plugin.updateApp(
       remoteUpdateFolder: _folderUrl!,
       changedFiles: _changedFiles ?? [],
     );
@@ -152,7 +184,13 @@ class DesktopUpdaterController extends ChangeNotifier {
         _downloadProgress = 1.0;
         _downloadedSize = _downloadSize;
         _isDownloaded = true;
+        _isPreparing = false;
 
+        notifyListeners();
+      },
+      onError: (_) {
+        _isDownloading = false;
+        _isPreparing = false;
         notifyListeners();
       },
     );

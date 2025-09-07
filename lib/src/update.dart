@@ -35,6 +35,7 @@ Future<Stream<UpdateProgress>> updateAppFunction({
       var receivedBytes = 0.0;
       final totalFiles = changes.length;
       var completedFiles = 0;
+  final lastPerFile = <String, double>{};
 
       // Calculate total length in KB
       final totalLengthKB = changes.fold<double>(
@@ -53,7 +54,12 @@ Future<Stream<UpdateProgress>> updateAppFunction({
               file.filePath,
               dir.path,
               (received, total) {
-                receivedBytes += received;
+                final prev = lastPerFile[file.filePath] ?? 0.0;
+                final delta = received - prev;
+                lastPerFile[file.filePath] = received;
+                if (delta > 0) {
+                  receivedBytes += delta;
+                }
                 responseStream.add(
                   UpdateProgress(
                     totalBytes: totalLengthKB,
