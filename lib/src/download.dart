@@ -38,31 +38,21 @@ Future<void> downloadFile(
   var received = 0;
   final contentLength = response.contentLength ?? 0;
 
-  // Listen to the HTTP response stream
-  await response.stream.listen(
-    (List<int> chunk) {
-      // Write chunk to file
+  try {
+    await for (final chunk in response.stream) {
       sink.add(chunk);
-
-      // Increment received bytes based on HTTP chunk
       received += chunk.length;
 
-      // Report progress
       if (progressCallback != null && contentLength != 0) {
         final receivedKB = received / 1024;
         final totalKB = contentLength / 1024;
         progressCallback(receivedKB, totalKB);
       }
-    },
-    onDone: () async {
-      await sink.close();
-      client.close();
-    },
-    onError: (e) {
-      sink.close();
-      client.close();
-      throw e;
-    },
-    cancelOnError: true,
-  ).asFuture();
+    }
+
+    await sink.flush();
+  } finally {
+    await sink.close();
+    client.close();
+  }
 }
