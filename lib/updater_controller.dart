@@ -1,4 +1,5 @@
 import "dart:math" as math;
+import "dart:io";
 
 import "package:desktop_updater/desktop_updater.dart";
 import "package:flutter/material.dart";
@@ -158,54 +159,100 @@ class DesktopUpdaterController extends ChangeNotifier {
       notifyListeners();
     }
 
-    final stream = await _plugin.updateApp(
-      remoteUpdateFolder: _folderUrl!,
-      changedFiles: _changedFiles ?? [],
-    );
+    try {
+      final stream = await _plugin.updateApp(
+        remoteUpdateFolder: _folderUrl!,
+        changedFiles: _changedFiles ?? [],
+      );
 
-    stream.listen(
-      (event) {
+      await for (final event in stream) {
         _updateProgress = event;
-
-        // if (_downloadProgress >= 1.0) {
-        //   _isDownloading = false;
-        //   _downloadProgress = 1.0;
-        //   _downloadedSize = _downloadSize;
-        //   _isDownloaded = true;
-
-        //   notifyListeners();
-        //   return;
-        // }
 
         _isDownloading = true;
         _isDownloaded = false;
+
         final totalBytes = event.totalBytes;
-        if (totalBytes <= 0) {
-          _downloadProgress = 0;
-        } else {
-          _downloadProgress = math.min(
-            1.0,
-            math.max(0.0, event.receivedBytes / totalBytes),
-          );
-        }
+        final bytesProgress = totalBytes <= 0
+            ? 0.0
+            : math.min(1.0, math.max(0.0, event.receivedBytes / totalBytes));
+
+        final filesProgress = event.totalFiles <= 0
+            ? 0.0
+            : math.min(
+                1.0,
+                math.max(0.0, event.completedFiles / event.totalFiles),
+              );
+
+        _downloadProgress = math.max(bytesProgress, filesProgress);
         _downloadedSize = _downloadSize * _downloadProgress;
         notifyListeners();
-      },
-      onDone: () {
-        _isDownloading = false;
+      }
+
+      final filesAreReady = await _verifyDownloadedFiles();
+
+      _isDownloading = false;
+      _isPreparing = false;
+      if (filesAreReady) {
         _downloadProgress = 1.0;
         _downloadedSize = _downloadSize;
         _isDownloaded = true;
-        _isPreparing = false;
+      } else {
+        _isDownloaded = false;
+      }
+      notifyListeners();
+    } catch (_) {
+      _isDownloading = false;
+      _isPreparing = false;
+      _isDownloaded = false;
+      notifyListeners();
+    }
+  }
 
-        notifyListeners();
-      },
-      onError: (_) {
-        _isDownloading = false;
-        _isPreparing = false;
-        notifyListeners();
-      },
+  Future<bool> _verifyDownloadedFiles() async {
+    final changedFiles = _changedFiles;
+    if (changedFiles == null || changedFiles.isEmpty) {
+      return false;
+    }
+
+    final executablePath = Platform.resolvedExecutable;
+    final directoryPath = executablePath.substring(
+      0,
+      executablePath.lastIndexOf(Platform.pathSeparator),
     );
+
+    var dir = Directory(directoryPath);
+    if (Platform.isMacOS) {
+      dir = dir.parent;
+    }
+
+    final updateDir = Directory("${dir.path}${Platform.pathSeparator}update");
+    if (!await updateDir.exists()) {
+      return false;
+    }
+
+    for (final item in changedFiles) {
+      if (item == null) continue;
+
+      final normalizedPath = item.filePath
+          .replaceAll("/", Platform.pathSeparator)
+          .replaceAll("\\", Platform.pathSeparator);
+      final localFile =
+          File("${updateDir.path}${Platform.pathSeparator}$normalizedPath");
+
+      if (!await localFile.exists()) {
+        return false;
+      }
+
+      final expectedLength = item.length;
+      if (expectedLength > 0) {
+        final actualLength = await localFile.length();
+        if (actualLength != expectedLength) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   void restartApp() {
