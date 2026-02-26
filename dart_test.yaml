@@ -1,0 +1,3 @@
+tags:
+  network:
+    timeout: 60s

@@ -14,7 +14,8 @@ Future<void> downloadFile(
   if (host == null) return;
 
   final client = http.Client();
-  final url = "$host/$filePath";
+  final normalizedRemotePath = filePath.replaceAll("\\", "/");
+  final url = "$host/$normalizedRemotePath";
   final request = http.Request("GET", Uri.parse(url));
   final response = await client.send(request);
 

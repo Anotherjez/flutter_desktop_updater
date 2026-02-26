@@ -82,9 +82,6 @@ Future<Stream<UpdateProgress>> updateAppFunction({
                   completedFiles: completedFiles,
                 ),
               );
-            }).catchError((error) {
-              responseStream.addError(error);
-              return null;
             }),
           );
         }
@@ -102,10 +99,13 @@ Future<Stream<UpdateProgress>> updateAppFunction({
               receivedBytes: receivedBytes,
               currentFile: "",
               totalFiles: totalFiles,
-              completedFiles: totalFiles,
+              completedFiles: completedFiles,
             ),
           );
 
+          await responseStream.close();
+        }).catchError((error) async {
+          responseStream.addError(error);
           await responseStream.close();
         }),
       );
