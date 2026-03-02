@@ -1,5 +1,6 @@
-import "dart:math" as math;
+import "dart:async";
 import "dart:io";
+import "dart:math" as math;
 
 import "package:desktop_updater/desktop_updater.dart";
 import "package:desktop_updater/src/file_hash.dart";
@@ -68,6 +69,7 @@ class DesktopUpdaterController extends ChangeNotifier {
 
   void init(Uri url) {
     _appArchiveUrl = url;
+    unawaited(_log("init: archiveUrl=$url"));
     checkVersion();
     notifyListeners();
   }
@@ -87,6 +89,11 @@ class DesktopUpdaterController extends ChangeNotifier {
     );
 
     if (versionResponse?.url != null) {
+      unawaited(
+        _log(
+          "checkVersion: update found version=${versionResponse?.version} short=${versionResponse?.shortVersion} url=${versionResponse?.url}",
+        ),
+      );
       _needUpdate = true;
       _folderUrl = versionResponse?.url;
       _isMandatory = versionResponse?.mandatory ?? false;
@@ -110,6 +117,7 @@ class DesktopUpdaterController extends ChangeNotifier {
         // Don't await; prepare in background
         _isPreparing = true;
         notifyListeners();
+        unawaited(_log("checkVersion: preparing changed files in background"));
         DesktopUpdater()
             .prepareUpdateApp(remoteUpdateFolder: _folderUrl!)
             .then((files) {
@@ -120,10 +128,16 @@ class DesktopUpdaterController extends ChangeNotifier {
               )) ??
               0.0;
           _isPreparing = false;
+          unawaited(
+            _log(
+              "checkVersion: prepare completed changedFiles=${_changedFiles?.length ?? 0} downloadSizeKB=${_downloadSize.toStringAsFixed(2)}",
+            ),
+          );
           notifyListeners();
         }).catchError((_) {
           // ignore background errors; will retry on explicit download
           _isPreparing = false;
+          unawaited(_log("checkVersion: prepare failed in background"));
           notifyListeners();
         });
       }
@@ -137,6 +151,8 @@ class DesktopUpdaterController extends ChangeNotifier {
       throw Exception("Folder URL is not set");
     }
 
+    unawaited(_log("downloadUpdate: requested folderUrl=$_folderUrl"));
+
     // Guard against re-entrancy (double taps)
     if (_isDownloading) return;
     _isDownloading = true;
@@ -146,6 +162,7 @@ class DesktopUpdaterController extends ChangeNotifier {
 
     // Lazily prepare changed files if not already present
     if (_changedFiles == null || _changedFiles!.isEmpty) {
+      unawaited(_log("downloadUpdate: changedFiles empty; preparing now"));
       _changedFiles = await _plugin.prepareUpdateApp(
         remoteUpdateFolder: _folderUrl!,
       );
@@ -157,6 +174,11 @@ class DesktopUpdaterController extends ChangeNotifier {
           )) ??
           0.0;
       _isPreparing = false;
+      unawaited(
+        _log(
+          "downloadUpdate: prepare completed changedFiles=${_changedFiles?.length ?? 0} downloadSizeKB=${_downloadSize.toStringAsFixed(2)}",
+        ),
+      );
       notifyListeners();
     }
 
@@ -165,6 +187,14 @@ class DesktopUpdaterController extends ChangeNotifier {
         remoteUpdateFolder: _folderUrl!,
         changedFiles: _changedFiles ?? [],
       );
+
+      unawaited(
+        _log(
+          "downloadUpdate: stream started changedFiles=${_changedFiles?.length ?? 0}",
+        ),
+      );
+
+      var lastLoggedPercent = -1;
 
       await for (final event in stream) {
         _updateProgress = event;
@@ -186,6 +216,19 @@ class DesktopUpdaterController extends ChangeNotifier {
 
         _downloadProgress = math.max(bytesProgress, filesProgress);
         _downloadedSize = _downloadSize * _downloadProgress;
+
+        final progressPercent = (_downloadProgress * 100).floor();
+        if (progressPercent >= 0 && progressPercent % 10 == 0) {
+          if (progressPercent != lastLoggedPercent) {
+            lastLoggedPercent = progressPercent;
+            unawaited(
+              _log(
+                "downloadUpdate: progress=${progressPercent}% files=${event.completedFiles}/${event.totalFiles} bytes=${event.receivedBytes.toStringAsFixed(2)}/${event.totalBytes.toStringAsFixed(2)} currentFile=${event.currentFile}",
+              ),
+            );
+          }
+        }
+
         notifyListeners();
       }
 
@@ -197,14 +240,19 @@ class DesktopUpdaterController extends ChangeNotifier {
         _downloadProgress = 1.0;
         _downloadedSize = _downloadSize;
         _isDownloaded = true;
+        unawaited(_log("downloadUpdate: verification passed, restart enabled"));
       } else {
         _isDownloaded = false;
+        unawaited(
+          _log("downloadUpdate: verification failed, restart not enabled"),
+        );
       }
       notifyListeners();
-    } catch (_) {
+    } catch (error, stackTrace) {
       _isDownloading = false;
       _isPreparing = false;
       _isDownloaded = false;
+      unawaited(_log("downloadUpdate: failed error=$error\n$stackTrace"));
       notifyListeners();
     }
   }
@@ -228,6 +276,7 @@ class DesktopUpdaterController extends ChangeNotifier {
 
     final updateDir = Directory("${dir.path}${Platform.pathSeparator}update");
     if (!await updateDir.exists()) {
+      await _log("verify: update folder missing path=${updateDir.path}");
       return false;
     }
 
@@ -241,6 +290,7 @@ class DesktopUpdaterController extends ChangeNotifier {
           File("${updateDir.path}${Platform.pathSeparator}$normalizedPath");
 
       if (!await localFile.exists()) {
+        await _log("verify: missing file path=${localFile.path}");
         return false;
       }
 
@@ -248,6 +298,7 @@ class DesktopUpdaterController extends ChangeNotifier {
       if (expectedLength > 0) {
         final actualLength = await localFile.length();
         if (actualLength <= 0) {
+          await _log("verify: zero size path=${localFile.path}");
           return false;
         }
       }
@@ -256,15 +307,33 @@ class DesktopUpdaterController extends ChangeNotifier {
       if (expectedHash.isNotEmpty) {
         final actualHash = await getFileHash(localFile);
         if (actualHash.isEmpty || actualHash != expectedHash) {
+          await _log("verify: hash mismatch path=${localFile.path}");
           return false;
         }
       }
     }
 
+    await _log(
+        "verify: all files validated changedFiles=${changedFiles.length}");
     return true;
   }
 
   void restartApp() {
+    unawaited(_log("restartApp: method invoked"));
     _plugin.restartApp();
+  }
+
+  Future<void> _log(String message) async {
+    try {
+      final logPath =
+          "${Directory.systemTemp.path}${Platform.pathSeparator}desktop_updater.log";
+      final now = DateTime.now().toIso8601String();
+      final logFile = File(logPath);
+      await logFile.writeAsString(
+        "[$now] $message${Platform.lineTerminator}",
+        mode: FileMode.append,
+        flush: true,
+      );
+    } catch (_) {}
   }
 }

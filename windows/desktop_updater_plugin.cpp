@@ -18,6 +18,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <cstdio>
 
 namespace fs = std::filesystem;
 namespace desktop_updater
@@ -61,11 +62,52 @@ namespace desktop_updater
     return result;
   }
 
+  std::wstring updaterLogPath()
+  {
+    wchar_t tempPath[MAX_PATH];
+    const DWORD length = GetTempPathW(MAX_PATH, tempPath);
+    if (length == 0 || length > MAX_PATH)
+    {
+      return L"desktop_updater.log";
+    }
+
+    return std::wstring(tempPath) + L"desktop_updater.log";
+  }
+
+  void appendUpdaterLog(const std::wstring &message)
+  {
+    SYSTEMTIME localTime;
+    GetLocalTime(&localTime);
+
+    char timestamp[64];
+    std::snprintf(
+        timestamp,
+        sizeof(timestamp),
+        "%04d-%02d-%02dT%02d:%02d:%02d.%03d",
+        static_cast<int>(localTime.wYear),
+        static_cast<int>(localTime.wMonth),
+        static_cast<int>(localTime.wDay),
+        static_cast<int>(localTime.wHour),
+        static_cast<int>(localTime.wMinute),
+        static_cast<int>(localTime.wSecond),
+        static_cast<int>(localTime.wMilliseconds));
+
+    std::ofstream logFile(wideToUtf8(updaterLogPath()), std::ios::app);
+    if (!logFile.is_open())
+    {
+      return;
+    }
+
+    logFile << "[" << timestamp << "] " << wideToUtf8(message) << "\n";
+    logFile.close();
+  }
+
   bool createBatFile(const std::wstring &scriptPath, const std::wstring &updateDir, const std::wstring &destDir, const std::wstring &executablePath)
   {
     const auto updateDirStr = wideToUtf8(updateDir);
     const auto destDirStr = wideToUtf8(destDir);
     const auto exePathStr = wideToUtf8(executablePath);
+    const auto logFilePath = wideToUtf8(updaterLogPath());
 
     const std::string batScript =
         "@echo off\n"
@@ -77,23 +119,32 @@ namespace desktop_updater
         destDirStr + "\"\n"
                      "set \"EXE_PATH=" +
         exePathStr + "\"\n"
-                     "timeout /t 2 /nobreak > NUL\n"
-                     "if not exist \"%UPDATE_DIR%\" exit /b 1\n"
-                     "xcopy /E /I /Y /Q \"%UPDATE_DIR%\\*\" \"%DEST_DIR%\\\" > NUL\n"
-                     "if errorlevel 1 exit /b 1\n"
-                     "rmdir /S /Q \"%UPDATE_DIR%\"\n"
-                     "start \"\" \"%EXE_PATH%\"\n"
-                     "del \"%~f0\"\n"
-                     "exit /b 0\n";
+                     "set \"LOG_FILE=" +
+        logFilePath + "\"\n"
+                      "echo [BAT] started >> \"%LOG_FILE%\"\n"
+                      "timeout /t 2 /nobreak > NUL\n"
+                      "if not exist \"%UPDATE_DIR%\" (echo [BAT] missing update dir: %UPDATE_DIR% >> \"%LOG_FILE%\" & exit /b 1)\n"
+                      "echo [BAT] copying from %UPDATE_DIR% to %DEST_DIR% >> \"%LOG_FILE%\"\n"
+                      "xcopy /E /I /Y /Q \"%UPDATE_DIR%\\*\" \"%DEST_DIR%\\\" > NUL\n"
+                      "if errorlevel 1 (echo [BAT] xcopy failed errorlevel=%errorlevel% >> \"%LOG_FILE%\" & exit /b 1)\n"
+                      "rmdir /S /Q \"%UPDATE_DIR%\"\n"
+                      "echo [BAT] launching %EXE_PATH% >> \"%LOG_FILE%\"\n"
+                      "start \"\" \"%EXE_PATH%\"\n"
+                      "if errorlevel 1 (echo [BAT] launch failed errorlevel=%errorlevel% >> \"%LOG_FILE%\" & exit /b 1)\n"
+                      "echo [BAT] completed successfully >> \"%LOG_FILE%\"\n"
+                      "del \"%~f0\"\n"
+                      "exit /b 0\n";
 
     std::ofstream batFile(wideToUtf8(scriptPath));
     if (!batFile.is_open())
     {
+      appendUpdaterLog(L"createBatFile: unable to open script file");
       return false;
     }
 
     batFile << batScript;
     batFile.close();
+    appendUpdaterLog(L"createBatFile: script created at " + scriptPath);
     return true;
   }
 
@@ -118,13 +169,15 @@ namespace desktop_updater
     {
       CloseHandle(pi.hProcess);
       CloseHandle(pi.hThread);
+      appendUpdaterLog(L"runBatFile: process started");
       return true;
     }
 
+    appendUpdaterLog(L"runBatFile: failed to start process");
     return false;
   }
 
-  void RestartApp()
+  bool RestartApp()
   {
     wchar_t executable_path[MAX_PATH];
     GetModuleFileNameW(NULL, executable_path, MAX_PATH);
@@ -134,6 +187,11 @@ namespace desktop_updater
     const fs::path updateDir = appDir / L"update";
     const fs::path scriptPath = appDir / L"update_script.bat";
 
+    appendUpdaterLog(L"RestartApp: invoked");
+    appendUpdaterLog(L"RestartApp: executablePath=" + executablePath.wstring());
+    appendUpdaterLog(L"RestartApp: appDir=" + appDir.wstring());
+    appendUpdaterLog(L"RestartApp: updateDir=" + updateDir.wstring());
+
     const bool scriptCreated = createBatFile(
         scriptPath.wstring(),
         updateDir.wstring(),
@@ -142,17 +200,21 @@ namespace desktop_updater
 
     if (!scriptCreated)
     {
-      return;
+      appendUpdaterLog(L"RestartApp: script creation failed");
+      return false;
     }
 
     const bool processStarted = runBatFile(scriptPath.wstring(), appDir.wstring());
     if (!processStarted)
     {
-      return;
+      appendUpdaterLog(L"RestartApp: batch process failed to start");
+      return false;
     }
 
+    appendUpdaterLog(L"RestartApp: exiting current process");
     // Exit the current process
     ExitProcess(0);
+    return true;
   }
 
   void DesktopUpdaterPlugin::HandleMethodCall(
@@ -179,7 +241,13 @@ namespace desktop_updater
     }
     else if (method_call.method_name().compare("restartApp") == 0)
     {
-      RestartApp();
+      const bool restartAccepted = RestartApp();
+      if (!restartAccepted)
+      {
+        appendUpdaterLog(L"HandleMethodCall: restartApp returned false");
+        result->Error("RestartError", "Unable to restart and apply update");
+        return;
+      }
       result->Success();
     }
     else if (method_call.method_name().compare("getExecutablePath") == 0)
