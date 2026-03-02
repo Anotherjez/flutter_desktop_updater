@@ -125,7 +125,7 @@ namespace desktop_updater
                       "timeout /t 2 /nobreak > NUL\n"
                       "if not exist \"%UPDATE_DIR%\" (echo [BAT] missing update dir: %UPDATE_DIR% >> \"%LOG_FILE%\" & exit /b 1)\n"
                       "echo [BAT] copying from %UPDATE_DIR% to %DEST_DIR% >> \"%LOG_FILE%\"\n"
-                      "xcopy /E /I /Y /Q \"%UPDATE_DIR%\\*\" \"%DEST_DIR%\\\" > NUL\n"
+                      "xcopy /E /I /Y /R /H /C /Q \"%UPDATE_DIR%\\*\" \"%DEST_DIR%\\\" > NUL\n"
                       "if errorlevel 1 (echo [BAT] xcopy failed errorlevel=%errorlevel% >> \"%LOG_FILE%\" & exit /b 1)\n"
                       "rmdir /S /Q \"%UPDATE_DIR%\"\n"
                       "echo [BAT] launching %EXE_PATH% >> \"%LOG_FILE%\"\n"

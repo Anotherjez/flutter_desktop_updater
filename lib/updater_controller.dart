@@ -65,6 +65,8 @@ class DesktopUpdaterController extends ChangeNotifier {
   bool _skipUpdate = false;
   bool get skipUpdate => _skipUpdate;
 
+  bool _isCheckingVersion = false;
+
   final _plugin = DesktopUpdater();
 
   void init(Uri url) {
@@ -80,69 +82,97 @@ class DesktopUpdaterController extends ChangeNotifier {
   }
 
   Future<void> checkVersion() async {
+    if (_isCheckingVersion) {
+      unawaited(_log("checkVersion: skipped (already running)"));
+      return;
+    }
+
+    _isCheckingVersion = true;
+
     if (_appArchiveUrl == null) {
+      _isCheckingVersion = false;
       throw Exception("App archive URL is not set");
     }
 
-    final versionResponse = await _plugin.versionCheck(
-      appArchiveUrl: appArchiveUrl.toString(),
-    );
-
-    if (versionResponse?.url != null) {
-      unawaited(
-        _log(
-          "checkVersion: update found version=${versionResponse?.version} short=${versionResponse?.shortVersion} url=${versionResponse?.url}",
-        ),
+    try {
+      final versionResponse = await _plugin.versionCheck(
+        appArchiveUrl: appArchiveUrl.toString(),
       );
-      _needUpdate = true;
-      _folderUrl = versionResponse?.url;
-      _isMandatory = versionResponse?.mandatory ?? false;
 
-      // Calculate total length in KB (from server-provided lengths)
-      _downloadSize = (versionResponse?.changedFiles?.fold<double>(
-            0,
-            (previousValue, element) =>
-                previousValue + ((element?.length ?? 0) / 1024.0),
-          )) ??
-          0.0;
+      if (versionResponse?.url != null) {
+        unawaited(
+          _log(
+            "checkVersion: update found version=${versionResponse?.version} short=${versionResponse?.shortVersion} url=${versionResponse?.url}",
+          ),
+        );
+        _needUpdate = true;
+        _folderUrl = versionResponse?.url;
+        _isMandatory = versionResponse?.mandatory ?? false;
 
-      // Get changed files liste
-      _changedFiles = versionResponse?.changedFiles;
-      _releaseNotes = versionResponse?.changes;
-      _appName = versionResponse?.appName;
-      _appVersion = versionResponse?.version;
+        // Calculate total length in KB (from server-provided lengths)
+        _downloadSize = (versionResponse?.changedFiles?.fold<double>(
+              0,
+              (previousValue, element) =>
+                  previousValue + ((element?.length ?? 0) / 1024.0),
+            )) ??
+            0.0;
 
-      // Pre-fetch changed files in background to reduce start lag
-      if (_folderUrl != null) {
-        // Don't await; prepare in background
-        _isPreparing = true;
-        notifyListeners();
-        unawaited(_log("checkVersion: preparing changed files in background"));
-        DesktopUpdater()
-            .prepareUpdateApp(remoteUpdateFolder: _folderUrl!)
-            .then((files) {
-          _changedFiles = files;
-          _downloadSize = (_changedFiles?.fold<double>(
-                0,
-                (prev, e) => prev + ((e?.length ?? 0) / 1024.0),
-              )) ??
-              0.0;
-          _isPreparing = false;
+        // Get changed files liste
+        _changedFiles = versionResponse?.changedFiles;
+        _releaseNotes = versionResponse?.changes;
+        _appName = versionResponse?.appName;
+        _appVersion = versionResponse?.version;
+
+        // Pre-fetch changed files in background to reduce start lag
+        if (_folderUrl != null) {
+          // Don't await; prepare in background
+          _isPreparing = true;
+          notifyListeners();
           unawaited(
-            _log(
-              "checkVersion: prepare completed changedFiles=${_changedFiles?.length ?? 0} downloadSizeKB=${_downloadSize.toStringAsFixed(2)}",
-            ),
+            _log("checkVersion: preparing changed files in background"),
           );
-          notifyListeners();
-        }).catchError((_) {
-          // ignore background errors; will retry on explicit download
-          _isPreparing = false;
-          unawaited(_log("checkVersion: prepare failed in background"));
-          notifyListeners();
-        });
-      }
+          DesktopUpdater()
+              .prepareUpdateApp(remoteUpdateFolder: _folderUrl!)
+              .then((files) {
+            _changedFiles = files;
+            _downloadSize = (_changedFiles?.fold<double>(
+                  0,
+                  (prev, e) => prev + ((e?.length ?? 0) / 1024.0),
+                )) ??
+                0.0;
+            _isPreparing = false;
 
-      notifyListeners();
+            if ((_changedFiles?.isEmpty ?? true)) {
+              _needUpdate = false;
+              unawaited(
+                _log(
+                  "checkVersion: prepare returned 0 changed files, hiding update prompt",
+                ),
+              );
+            }
+
+            unawaited(
+              _log(
+                "checkVersion: prepare completed changedFiles=${_changedFiles?.length ?? 0} downloadSizeKB=${_downloadSize.toStringAsFixed(2)}",
+              ),
+            );
+            notifyListeners();
+          }).catchError((error, stackTrace) {
+            // ignore background errors; will retry on explicit download
+            _isPreparing = false;
+            unawaited(
+              _log(
+                "checkVersion: prepare failed in background error=$error\n$stackTrace",
+              ),
+            );
+            notifyListeners();
+          });
+        }
+
+        notifyListeners();
+      }
+    } finally {
+      _isCheckingVersion = false;
     }
   }
 
@@ -179,6 +209,20 @@ class DesktopUpdaterController extends ChangeNotifier {
           "downloadUpdate: prepare completed changedFiles=${_changedFiles?.length ?? 0} downloadSizeKB=${_downloadSize.toStringAsFixed(2)}",
         ),
       );
+
+      if (_changedFiles == null || _changedFiles!.isEmpty) {
+        _isDownloading = false;
+        _isDownloaded = false;
+        _needUpdate = false;
+        unawaited(
+          _log(
+            "downloadUpdate: no effective changed files after prepare; hiding update prompt",
+          ),
+        );
+        notifyListeners();
+        return;
+      }
+
       notifyListeners();
     }
 
