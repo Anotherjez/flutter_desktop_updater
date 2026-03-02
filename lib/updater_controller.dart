@@ -2,6 +2,7 @@ import "dart:math" as math;
 import "dart:io";
 
 import "package:desktop_updater/desktop_updater.dart";
+import "package:desktop_updater/src/file_hash.dart";
 import "package:flutter/material.dart";
 
 class DesktopUpdaterController extends ChangeNotifier {
@@ -246,7 +247,15 @@ class DesktopUpdaterController extends ChangeNotifier {
       final expectedLength = item.length;
       if (expectedLength > 0) {
         final actualLength = await localFile.length();
-        if (actualLength != expectedLength) {
+        if (actualLength <= 0) {
+          return false;
+        }
+      }
+
+      final expectedHash = item.calculatedHash;
+      if (expectedHash.isNotEmpty) {
+        final actualHash = await getFileHash(localFile);
+        if (actualHash.isEmpty || actualHash != expectedHash) {
           return false;
         }
       }

@@ -47,100 +47,109 @@ namespace desktop_updater
 
   DesktopUpdaterPlugin::~DesktopUpdaterPlugin() {}
 
-  // Modify the createBatFile function to accept parameters and use them in the bat script
-  void createBatFile(const std::wstring &updateDir, const std::wstring &destDir, const wchar_t *executable_path)
+  std::string wideToUtf8(const std::wstring &value)
   {
-    // Convert wide strings to regular strings using Windows API for proper conversion
-    int updateSize = WideCharToMultiByte(CP_UTF8, 0, updateDir.c_str(), -1, NULL, 0, NULL, NULL);
-    std::string updateDirStr(updateSize, 0);
-    WideCharToMultiByte(CP_UTF8, 0, updateDir.c_str(), -1, &updateDirStr[0], updateSize, NULL, NULL);
-    updateDirStr.pop_back(); // Remove null terminator
+    int size = WideCharToMultiByte(CP_UTF8, 0, value.c_str(), -1, NULL, 0, NULL, NULL);
+    if (size <= 0)
+    {
+      return "";
+    }
 
-    int destSize = WideCharToMultiByte(CP_UTF8, 0, destDir.c_str(), -1, NULL, 0, NULL, NULL);
-    std::string destDirStr(destSize, 0);
-    WideCharToMultiByte(CP_UTF8, 0, destDir.c_str(), -1, &destDirStr[0], destSize, NULL, NULL);
-    destDirStr.pop_back(); // Remove null terminator
+    std::string result(size, 0);
+    WideCharToMultiByte(CP_UTF8, 0, value.c_str(), -1, &result[0], size, NULL, NULL);
+    result.pop_back();
+    return result;
+  }
 
-    int exePathSize = WideCharToMultiByte(CP_UTF8, 0, executable_path, -1, NULL, 0, NULL, NULL);
-    std::string exePathStr(exePathSize, 0);
-    WideCharToMultiByte(CP_UTF8, 0, executable_path, -1, &exePathStr[0], exePathSize, NULL, NULL);
-    exePathStr.pop_back(); // Remove null terminator
+  bool createBatFile(const std::wstring &scriptPath, const std::wstring &updateDir, const std::wstring &destDir, const std::wstring &executablePath)
+  {
+    const auto updateDirStr = wideToUtf8(updateDir);
+    const auto destDirStr = wideToUtf8(destDir);
+    const auto exePathStr = wideToUtf8(executablePath);
 
     const std::string batScript =
         "@echo off\n"
         "chcp 65001 > NUL\n"
-        // "echo Updating the application...\n"
-        "timeout /t 2 /nobreak > NUL\n"
-        // "echo Copying files...\n"
-        "xcopy /E /I /Y \"" +
-        updateDirStr + "\\*\" \"" + destDirStr + "\\\"\n"
-                                                 "rmdir /S /Q \"" +
-        updateDirStr + "\"\n" +
-        // "echo Files copied.\n"
-        "timeout /t 1 /nobreak > NUL\n"
-        "start \"\" \"" +
+        "setlocal\n"
+        "set \"UPDATE_DIR=" +
+        updateDirStr + "\"\n"
+                       "set \"DEST_DIR=" +
+        destDirStr + "\"\n"
+                     "set \"EXE_PATH=" +
         exePathStr + "\"\n"
-                     "timeout /t 1 /nobreak > NUL\n"
-                     // "echo Deleting temporary files...\n"
-                     "del update_script.bat\n"
-                     "\"\n"
-                     "exit\n";
+                     "timeout /t 2 /nobreak > NUL\n"
+                     "if not exist \"%UPDATE_DIR%\" exit /b 1\n"
+                     "xcopy /E /I /Y /Q \"%UPDATE_DIR%\\*\" \"%DEST_DIR%\\\" > NUL\n"
+                     "if errorlevel 1 exit /b 1\n"
+                     "rmdir /S /Q \"%UPDATE_DIR%\"\n"
+                     "start \"\" \"%EXE_PATH%\"\n"
+                     "del \"%~f0\"\n"
+                     "exit /b 0\n";
 
-    std::ofstream batFile("update_script.bat");
+    std::ofstream batFile(wideToUtf8(scriptPath));
+    if (!batFile.is_open())
+    {
+      return false;
+    }
+
     batFile << batScript;
     batFile.close();
-    std::cout << "Temporary .bat created.\n";
+    return true;
   }
 
-  void runBatFile()
+  bool runBatFile(const std::wstring &scriptPath, const std::wstring &workingDir)
   {
     STARTUPINFO si = {sizeof(si)};
     PROCESS_INFORMATION pi;
 
-    WCHAR cmdLine[] = L"cmd.exe /c update_script.bat";
+    std::wstring cmdLine = L"cmd.exe /c \"" + scriptPath + L"\"";
+
     if (CreateProcess(
             NULL,
-            cmdLine,
+            cmdLine.data(),
             NULL,
             NULL,
             FALSE,
             CREATE_NO_WINDOW,
             NULL,
-            NULL,
+            workingDir.c_str(),
             &si,
             &pi))
     {
       CloseHandle(pi.hProcess);
       CloseHandle(pi.hThread);
+      return true;
     }
-    else
-    {
-      std::cout << "Failed to run the .bat file.\n";
-    }
+
+    return false;
   }
 
   void RestartApp()
   {
-    printf("Restarting the application...\n");
-    // Get the current executable file path
-    char szFilePath[MAX_PATH];
-    GetModuleFileNameA(NULL, szFilePath, MAX_PATH);
-
-    // Child process
     wchar_t executable_path[MAX_PATH];
     GetModuleFileNameW(NULL, executable_path, MAX_PATH);
 
-    printf("Executable path: %ls\n", executable_path);
+    const fs::path executablePath(executable_path);
+    const fs::path appDir = executablePath.parent_path();
+    const fs::path updateDir = appDir / L"update";
+    const fs::path scriptPath = appDir / L"update_script.bat";
 
-    // Replace the existing copyDirectory lambda with copyAndReplaceFiles function
-    std::wstring updateDir = L"update";
-    std::wstring destDir = L".";
+    const bool scriptCreated = createBatFile(
+        scriptPath.wstring(),
+        updateDir.wstring(),
+        appDir.wstring(),
+        executablePath.wstring());
 
-    // Update createBatFile call with parameters
-    createBatFile(updateDir, destDir, executable_path);
+    if (!scriptCreated)
+    {
+      return;
+    }
 
-    // 3. .bat dosyasını çalıştır
-    runBatFile();
+    const bool processStarted = runBatFile(scriptPath.wstring(), appDir.wstring());
+    if (!processStarted)
+    {
+      return;
+    }
 
     // Exit the current process
     ExitProcess(0);
