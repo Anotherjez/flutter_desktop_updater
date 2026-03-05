@@ -350,9 +350,28 @@ class DesktopUpdaterController extends ChangeNotifier {
       final expectedHash = item.calculatedHash;
       if (expectedHash.isNotEmpty) {
         final actualHash = await getFileHash(localFile);
-        if (actualHash.isEmpty || actualHash != expectedHash) {
-          await _log("verify: hash mismatch path=${localFile.path}");
+        if (actualHash.isEmpty) {
+          await _log("verify: empty hash path=${localFile.path}");
           return false;
+        }
+
+        if (actualHash != expectedHash) {
+          final lowerPath = normalizedPath.toLowerCase();
+          final isCriticalBinary = lowerPath.endsWith(".exe") ||
+              lowerPath.endsWith(".dll") ||
+              lowerPath.endsWith(".so") ||
+              lowerPath.endsWith(".dylib");
+
+          if (isCriticalBinary) {
+            await _log(
+              "verify: hash mismatch (critical) path=${localFile.path} expected=$expectedHash actual=$actualHash",
+            );
+            return false;
+          }
+
+          await _log(
+            "verify: hash mismatch (non-critical, continuing) path=${localFile.path} expected=$expectedHash actual=$actualHash",
+          );
         }
       }
     }
